@@ -5,6 +5,11 @@ import random
 from string import ascii_letters, digits
 from flask import request
 
+from apscheduler.schedulers.background import BackgroundScheduler
+
+
+
+
 app = Flask(__name__)
 
 
@@ -15,8 +20,23 @@ auth = HTTPBasicAuth()
 
 db = SQLAlchemy(app)
 
+
+
 DAILY_MAX_EMAILS = 100
 LIMIT_PER_REQUEST = 20
+
+scheduler = BackgroundScheduler()
+
+
+def refresh_limits():
+    with app.app_context():
+        print("refreshing limits")
+        users = User.query.all()
+        for user in users:
+            user.remaining_email_limit = DAILY_MAX_EMAILS
+        db.session.commit()
+
+scheduler.add_job(func=refresh_limits, trigger="interval", days=1)
 
 
 class Email(db.Model):
@@ -35,10 +55,6 @@ class User(db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False)
     password = db.Column(db.String(120), nullable=False) 
     remaining_email_limit = db.Column(db.Integer, nullable=False)
-
-
-
-
 
 
 
@@ -91,12 +107,14 @@ with app.app_context():
     db.session.bulk_save_objects(users)
 
     
-    db.session.commit()    
+
 
 
     
+    db.session.commit()    
 
 
+    scheduler.start()
 
 
 
