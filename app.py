@@ -21,6 +21,8 @@ def view_emails():
     page = request.args.get('page', default=1, type=int)
     entries = request.args.get('entries', default=20, type=int)
 
+    entries = max(1, min(entries, 20))
+
     # query database for emails
     emails = Email.query.paginate(page=page, per_page=entries)
 
