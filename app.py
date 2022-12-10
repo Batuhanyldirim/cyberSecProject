@@ -46,13 +46,14 @@ scheduler = BackgroundScheduler()
 
 def refresh_limits():
     with app.app_context():
-        print("refreshing limits")
+        print('refreshing limits')
         users = User.query.all()
         for user in users:
             user.remaining_email_limit = DAILY_MAX_EMAILS
+            user.email_sent = False
         db.session.commit()
 
-scheduler.add_job(func=refresh_limits, trigger="interval", days=1)
+scheduler.add_job(func=refresh_limits, trigger="interval", minutes=1)
 
 
 class Email(db.Model):
@@ -114,8 +115,10 @@ def view_emails():
         # TODO: send email to user to notify them that they have exceeded their daily 
         errorMessage = 'You can only request {} more emails today'.format(user.remaining_email_limit)
         if not user.email_sent:
-            send_email(user, errorMessage)
 
+            user.email_sent = True
+            thread = threading.Thread(target=send_email, args=(user, errorMessage))
+            thread.start()
             db.session.commit()
 
 
