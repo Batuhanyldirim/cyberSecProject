@@ -2,6 +2,7 @@ from flask import Flask,json
 from flask_sqlalchemy import SQLAlchemy
 import random
 from string import ascii_letters, digits
+from flask import request
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
@@ -14,9 +15,7 @@ class Email(db.Model):
     email  = db.Column(db.String(40))
 
 
-from flask import request
-
-@app.route('/mail/view')
+@app.route('/mail/view', methods=['GET'])
 def view_emails():
     # get page and entries parameters from request
     page = request.args.get('page', default=1, type=int)
