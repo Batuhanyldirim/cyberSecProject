@@ -4,6 +4,12 @@ from flask_httpauth import HTTPBasicAuth
 import random
 from string import ascii_letters, digits
 from flask import request
+import os
+import smtplib
+from email.message import EmailMessage
+
+
+import threading
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
@@ -20,10 +26,20 @@ auth = HTTPBasicAuth()
 
 db = SQLAlchemy(app)
 
+email_password = os.environ.get('EMAIL_PASSWORD')
+
 
 
 DAILY_MAX_EMAILS = 100
 LIMIT_PER_REQUEST = 20
+
+# email server and authentication details
+smtp_server = "smtp.gmail.com"
+smtp_port = 587
+smtp_username = "flaskurban@gmail.com"
+smtp_password = email_password
+subject = "Daily email limit exceeded"
+
 
 scheduler = BackgroundScheduler()
 
@@ -55,6 +71,29 @@ class User(db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False)
     password = db.Column(db.String(120), nullable=False) 
     remaining_email_limit = db.Column(db.Integer, nullable=False)
+    email_sent = db.Column(db.Boolean, default=False, nullable=False)
+
+
+
+def send_email(user, errorMessage):
+
+
+    # recipient's email address and email content
+    to_email = user.email
+    body = errorMessage
+
+    msg = EmailMessage()
+    msg.set_content(body)
+    msg['Subject'] = subject
+    msg['To'] = to_email
+
+    # TODO login once and reuse connection (doesn't matter much as there are only 10 users)
+    with smtplib.SMTP(smtp_server, smtp_port) as server:
+        server.starttls()
+        server.login(smtp_username, smtp_password)
+        server.send_message(msg)
+
+    user.email_sent = True
 
 
 
@@ -72,8 +111,20 @@ def view_emails():
 
 
     if user.remaining_email_limit < entriesLimited:
-        # TODO: send email to user to notify them that they have exceeded their daily limit
-        return json.jsonify({'error': 'You can only request {} more emails today'.format(user.remaining_email_limit)}), 429
+        # TODO: send email to user to notify them that they have exceeded their daily 
+        errorMessage = 'You can only request {} more emails today'.format(user.remaining_email_limit)
+        if not user.email_sent:
+            send_email(user, errorMessage)
+
+            db.session.commit()
+
+
+
+
+
+
+        return json.jsonify({'error': errorMessage}), 429
+
     
     user.remaining_email_limit -= entriesLimited
 
