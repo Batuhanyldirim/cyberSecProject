@@ -10,12 +10,46 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
 db = SQLAlchemy(app)
 
 
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    userName = db.Column(db.String(40))
+    password = db.Column(db.String(60))
+    session_token = db.Column(db.String(10))
+
 class Email(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email  = db.Column(db.String(40))
 
 
-@app.route('/mail/view', methods=['GET'])
+
+@app.route('/login', methods=['POST'])
+def login():
+    # get username and password from request
+    username = request.form.get('username')
+    password = request.form.get('password')
+    
+
+    # query database for user with matching username and password
+    user = User.query.filter_by(userName=username, password=password).first()
+
+    # if user is found, return success message
+    if user:
+        session_token = ''.join(random.choices(ascii_letters + digits, k=10))
+
+        # assign session token to user
+        user.session_token = session_token
+
+        # save changes to database
+        db.session.commit()
+
+        # return success message with session token
+        return json.jsonify({'status': 'success', 'session_token': session_token})
+
+    # if user is not found, return error message
+    return json.jsonify({'status': 'error', 'message': 'Invalid username or password'})
+
+
+""" @app.route('/mail/view', methods=['GET'])
 def view_emails():
     # get page and entries parameters from request
     page = request.args.get('page', default=1, type=int)
@@ -29,6 +63,34 @@ def view_emails():
 
     # return emails as JSON response
     return json.jsonify({'emails': emailStrings})
+ """
+
+
+@app.route('/mail/view', methods=['GET'])
+def view_emails():
+    # get session token and username from request
+    session_token = request.args.get('session_token')
+    username = request.args.get('username')
+
+    # query database for user with matching session token and username
+    user = User.query.filter_by(session_token=session_token, userName=username).first()
+
+    # if user is found, return paginated email list
+    if user:
+        # get page and entries parameters from request
+        page = request.args.get('page', default=1, type=int)
+        entries = request.args.get('entries', default=20, type=int)
+
+        # query database for emails
+        emails = Email.query.paginate(page=page, per_page=entries)
+
+        emailStrings = [item.email for item in emails.items]
+
+        # return emails as JSON response
+        return json.jsonify({'emails': emailStrings})
+
+    # if user is not found, return error message
+    return json.jsonify({'status': 'error', 'message': 'Invalid session token or username'})
 
 
 with app.app_context():
@@ -36,7 +98,13 @@ with app.app_context():
    
     
     db.session.bulk_insert_mappings(Email, [{'email': ''.join(random.choices(ascii_letters + digits, k=25)) + '@gmail.com'} for _ in range(1000000)])
-    db.session.commit()    
+    db.session.commit()   
+
+    db.session.bulk_insert_mappings(User, [
+        {'userName': 'user1', 'password': 'password1'}, 
+        {'userName': 'user2', 'password': 'password2'}
+        ])
+    db.session.commit() 
 
 
 
