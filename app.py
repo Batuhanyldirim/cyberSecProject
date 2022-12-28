@@ -53,7 +53,7 @@ def refresh_limits():
             user.email_sent = False
         db.session.commit()
 
-scheduler.add_job(func=refresh_limits, trigger="interval", minutes=1)
+scheduler.add_job(func=refresh_limits, trigger="interval", minutes=10)
 
 
 class Email(db.Model):
@@ -96,50 +96,69 @@ def send_email(user, errorMessage):
 
     user.email_sent = True
 
+@app.route('/public/mail/view/limitless', methods=['GET'])
+def view_emails_public():
+    page = request.args.get('page', default=1, type=int)
+    entries = request.args.get('entries', default=LIMIT_PER_REQUEST, type=int)
+    emails = Email.query.paginate(page=page, per_page=entries)
+    emailStrings = [item.email for item in emails.items]
+    return {'emails': emailStrings}
 
+@app.route('/public/mail/view/limited', methods=['GET'])
+def view_emails_public_limited():
+    page = request.args.get('page', default=1, type=int)
+    emails = Email.query.paginate(page=page, per_page=LIMIT_PER_REQUEST)
+    emailStrings = [item.email for item in emails.items]
+    return {'emails': emailStrings}
 
+@app.route('/mail/view/autWithFlaw', methods=['GET'])
+@auth.login_required
+def view_emails_flaw():
+    # get page and entries parameters from request
+    page = request.args.get('page', default=1, type=int)
+    entries = request.args.get('entries', default=LIMIT_PER_REQUEST, type=int)
+    emails = Email.query.paginate(page=page, per_page=entries)
+    emailStrings = [item.email for item in emails.items]
+    return {'emails': emailStrings}
 
 @app.route('/mail/view', methods=['GET'])
 @auth.login_required
 def view_emails():
     # get page and entries parameters from request
     user = auth.current_user()
-
     page = request.args.get('page', default=1, type=int)
     entries = request.args.get('entries', default=LIMIT_PER_REQUEST, type=int)
-
-    entriesLimited  = max(min(entries, LIMIT_PER_REQUEST), 1)
-
-
-    if user.remaining_email_limit < entriesLimited:
-        # TODO: send email to user to notify them that they have exceeded their daily 
-        errorMessage = 'You can only request {} more emails today'.format(user.remaining_email_limit)
+    if entries > LIMIT_PER_REQUEST:
+        return json.jsonify({"error":"Exceeded max limit"}),429
+    elif user.remaining_email_limit == 0:
+        errorMessage = 'You reached your daily email limit today'
         if not user.email_sent:
-
             user.email_sent = True
             thread = threading.Thread(target=send_email, args=(user, errorMessage))
             thread.start()
-            db.session.commit()
+            db.session.commit()    
+            # query database for emails
+        return {"error":errorMessage},429
 
+    elif user.remaining_email_limit <= entries:
+        # TODO: send email to user to notify them that they have exceeded their daily 
+        errorMessage = 'You reached your daily email limit today'
+        user.email_sent = True
+        thread = threading.Thread(target=send_email, args=(user, errorMessage))
+        thread.start()
+        db.session.commit()    
+        # query database for emails
+        emails = Email.query.paginate(page=page, per_page=user.remaining_email_limit)
+        user.remaining_email_limit = 0 
+        db.session.commit()
+        emailStrings = [item.email for item in emails.items]
+        return json.jsonify({'emails': emailStrings})
 
-
-
-
-
-        return json.jsonify({'error': errorMessage}), 429
-
-    
-    user.remaining_email_limit -= entriesLimited
-
-
-
+    user.remaining_email_limit -= entries
     # query database for emails
     emails = Email.query.paginate(page=page, per_page=entries)
     db.session.commit()
-
     emailStrings = [item.email for item in emails.items]
-
-
     # return emails as JSON response
     return json.jsonify({'emails': emailStrings})
 
