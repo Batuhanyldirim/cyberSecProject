@@ -81,6 +81,10 @@ def view_emails():
         page = request.args.get('page', default=1, type=int)
         entries = request.args.get('entries', default=20, type=int)
 
+        if entries > 20:
+            return json.jsonify({'status': 'error', 'message': 'entry limit exceeded'})
+
+
         # query database for emails
         emails = Email.query.paginate(page=page, per_page=entries)
 
