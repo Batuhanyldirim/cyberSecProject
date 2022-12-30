@@ -22,6 +22,11 @@ class Email(db.Model):
 
 
 
+
+
+
+
+
 @app.route('/login', methods=['POST'])
 def login():
     # get username and password from request
@@ -64,6 +69,23 @@ def view_emails():
     # return emails as JSON response
     return json.jsonify({'emails': emailStrings})
  """
+
+
+@app.route('/base64/encode', methods=['GET'])
+def base64_encode():
+    # Hardcoded username and password
+    username = "user1"
+    password = "p@ssw0rd"
+
+    # Concatenate the username and password separated by a colon
+    auth_string = f"{username}:{password}"
+
+    # Encode the auth string in Base64
+    encoded_auth_string = b64encode(auth_string.encode()).decode()
+
+    # Return the encoded auth string in the response
+    return jsonify({"encoded_auth_string": encoded_auth_string})
+
 
 
 @app.route('/mail/view', methods=['GET'])
