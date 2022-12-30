@@ -1,8 +1,11 @@
-from flask import Flask,json
+from flask import Flask,json,jsonify,request
 from flask_sqlalchemy import SQLAlchemy
 import random
 from string import ascii_letters, digits
-from flask import request
+from base64 import b64encode
+
+
+
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
@@ -69,7 +72,6 @@ def view_emails():
     # return emails as JSON response
     return json.jsonify({'emails': emailStrings})
  """
-
 
 @app.route('/base64/encode', methods=['GET'])
 def base64_encode():
